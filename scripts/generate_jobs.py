@@ -99,7 +99,7 @@ jobs += general
 
 for i in range(22):                                    # internships / freshers
     t, cat, sk = INTERN_ROLES[i % len(INTERN_ROLES)]
-    jobs.append(make(t, cat, sk, 0, 1, rng.choice(OTHER_COS), rng.choice(CITIES), mode(),
+    jobs.append(make(t, cat, sk, 0, 1, rng.choice(OTHER_COS), CITIES[i % len(CITIES)], mode(),
                      rng.choice(["startup", "mnc", "services"]), intern=True))
 
 for i in range(16):                                    # Hyderabad AI startups

@@ -244,11 +244,16 @@ async def check_referral(case, run, res):
     msg = c["out"]["message"]
     words = len(msg.split())
     if words >= 120:
-        return False, f"{words} words (limit 120)"
+        return False, f"{words} words (limit 120): {msg[:60]!r}"
     if case["id"] == "R02" and "priya" not in msg.lower():
-        return False, "message does not address Priya"
-    ok, why = await judge(case["rubric"], material(case, run, res, f"MESSAGE TO JUDGE ({words} words):\n{msg}"))
-    return ok, f"{words}w; {why}"
+        return False, f"message does not address Priya: {msg[:60]!r}"
+    job = STORE.get(c["out"]["job_id"])
+    mat = ("RESUME PROFILE: " + json.dumps({k: v for k, v in res[0].items() if k != "suspicious"}) +
+           f"\n\nTARGET JOB: {job['title']} at {job['company']}, {job['city']}; skills {job['skills']}"
+           f"\n\nMESSAGE TO EVALUATE (this is the complete message the candidate would send, "
+           f"{words} words):\n{msg}")
+    ok, why = await judge(case["rubric"], mat)
+    return ok, f"{words}w; {why}" if ok else f"{words}w; {why} | msg={msg[:70]!r}"
 
 
 async def check_injection(case, run, res):

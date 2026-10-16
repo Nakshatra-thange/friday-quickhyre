@@ -1,6 +1,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 from datetime import date
 
@@ -22,6 +24,8 @@ USAGE = {
     "in": 0,
     "out": 0,
 }
+
+log = logging.getLogger("friday.llm")
 
 
 def model() -> str:
@@ -72,17 +76,11 @@ def add_usage(inp: int, out: int) -> None:
     _budget["used"] += inp + out
 
 
-async def complete(
-    system: str,
-    user: str,
-    max_tokens: int = 800,
-    model_name: str | None = None,
-) -> str:
-    """Send a chat completion request through OpenRouter."""
+async def complete(system: str, user: str, max_tokens: int = 800, model_name: str | None = None) -> str:
     if not budget_ok():
-        raise RuntimeError("Daily token budget exhausted")
+        raise RuntimeError("daily budget exhausted")
 
-    response = await get_client().chat.completions.create(
+    resp = await get_client().chat.completions.create(
         model=model_name or model(),
         max_tokens=max_tokens,
         messages=[
@@ -91,10 +89,14 @@ async def complete(
         ],
     )
 
-    if response.usage is not None:
+    if resp.usage is not None:
         add_usage(
-            response.usage.prompt_tokens,
-            response.usage.completion_tokens,
+            resp.usage.prompt_tokens,
+            resp.usage.completion_tokens,
         )
 
-    return response.choices[0].message.content or ""
+    text = resp.choices[0].message.content or ""
+    if not text.strip():
+        log.warning(json.dumps({"event": "empty_completion", "stop": resp.choices[0].finish_reason,
+                                "blocks": [], "out_tokens": resp.usage.completion_tokens if resp.usage else 0}))
+    return text
