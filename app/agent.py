@@ -11,7 +11,7 @@ from app import llm
 from app.tools.registry import TOOL_SCHEMAS, run_tool
 
 # TOOL_SCHEMAS are authored in Anthropic shape ({name, description, input_schema});
-# Rapid Router speaks the OpenAI chat-completions shape, so convert at call time.
+# OpenRouter speaks the OpenAI chat-completions shape, so convert at call time.
 def _to_openai_tools(schemas: list[dict]) -> list[dict]:
     out: list[dict] = []
     for s in schemas:
@@ -50,6 +50,13 @@ Resume tools (need an uploaded resume; if none is loaded, ask the user to upload
 - Resume optimisation: call ats_check. Report keyword coverage, missing keywords as GAPS (never as things to just add), formatting flags, then follow rewrite_guidance for exactly 3 rewrites of the weak_bullets. Use [X] placeholders for numbers the user must supply truthfully. Never add skills or experience the resume doesn't show.
 - Referral/outreach messages: call draft_referral_message, show the message verbatim, then one line reminding them to fill placeholders and keep claims true.
 - If the user says "the first job on this list" and there is no earlier list in the conversation, run a search first or ask which job they mean.
+
+Tool discipline:
+- "Optimize/improve my resume for job_X": call ats_check immediately with that job_id. Do not call get_job or get_resume_profile first.
+- "Why am I a fit for job_X": call explain_match immediately.
+- Referral/outreach request: call draft_referral_message immediately with the job_id and the contact_type (alumni, ex_colleague or hiring_manager) plus contact_name if given. Never ask follow-up questions first; the message uses placeholders for missing details.
+- After any tool result you MUST write a final answer to the user. Never end a turn with no text.
+- Never cite a job_id you did not receive from a tool in this conversation.
 """
 
 
@@ -66,6 +73,7 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
     session["messages"].append({"role": "user", "content": user_text})
     used: list[str] = []
     t0 = time.time()
+    said,nudged = False,False
     try:
         for _ in range(MAX_ITERS):
             stream = await llm.get_client().chat.completions.create(

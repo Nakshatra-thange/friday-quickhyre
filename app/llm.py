@@ -6,9 +6,9 @@ from datetime import date
 
 from openai import AsyncOpenAI
 
-# All AI requests go through RapidRouter.
+# All AI requests go through OpenRouter.
 # The OpenAI SDK is used only as an HTTP client.
-_RR_BASE_URL = "https://rapidrouter.ai/api/v1"
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 _client: AsyncOpenAI | None = None
 
@@ -25,28 +25,28 @@ USAGE = {
 
 
 def model() -> str:
-    """Return the configured RapidRouter model ID."""
+    """Return the configured OpenRouter model ID."""
     return os.getenv(
         "FRIDAY_MODEL",
-        "nvidia/nvidia-nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3.5-super-vl:free",
     )
 
 
 def get_client() -> AsyncOpenAI:
-    """Create and reuse the RapidRouter API client."""
+    """Create and reuse the OpenRouter API client."""
     global _client
 
     if _client is None:
-        api_key = os.getenv("RAPIDROUTER_API_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY")
 
         if not api_key:
             raise RuntimeError(
-                "RAPIDROUTER_API_KEY is not set in .env"
+                "OPENROUTER_API_KEY is not set in .env"
             )
 
         _client = AsyncOpenAI(
             api_key=api_key,
-            base_url=_RR_BASE_URL,
+            base_url=_OPENROUTER_BASE_URL,
             timeout=60.0,
             max_retries=2,
         )
@@ -78,7 +78,7 @@ async def complete(
     max_tokens: int = 800,
     model_name: str | None = None,
 ) -> str:
-    """Send a chat completion request through RapidRouter."""
+    """Send a chat completion request through OpenRouter."""
     if not budget_ok():
         raise RuntimeError("Daily token budget exhausted")
 

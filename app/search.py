@@ -16,7 +16,10 @@ DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "jobs.json"
 CITY_ALIASES = {"bengaluru": "bangalore", "gurugram": "gurgaon", "new delhi": "delhi",
                 "bombay": "mumbai", "madras": "chennai"}
 STOPWORDS = {"a", "an", "the", "in", "at", "for", "of", "and", "or", "me", "show", "find", "jobs",
-             "job", "openings", "opening", "latest", "roles", "role", "to", "with", "on", "my"}
+             "job", "openings", "opening", "latest", "roles", "role", "to", "with", "on", "my",
+             "internship", "internships", "intern", "interns", "fresher", "freshers", "student",
+             "students", "college", "entry", "level", "remote", "hybrid", "onsite", "startup",
+             "startups", "company", "companies", "any", "are", "there", "please"}
 
 
 def _norm(s: str) -> str:

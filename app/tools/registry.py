@@ -20,19 +20,23 @@ def _card(j: dict[str, Any]) -> dict[str, Any]:
             "exp_max": j["exp_max"], "is_internship": j["is_internship"],
             "short_description": d if len(d) <= SHORT else d[:SHORT].rstrip() + "..."}
 
-
 def search_jobs(args: dict[str, Any], session: dict) -> dict[str, Any]:
     resume = session.get("resume") or {}
+    min_exp, max_exp = args.get("min_exp"), args.get("max_exp")
+    # A single value means "the candidate's years": treat it as both bounds.
+    if min_exp is None and max_exp is not None:
+        min_exp = max_exp
+    if max_exp is None and min_exp is not None:
+        max_exp = min_exp
     jobs = get_store().search(
         query=args.get("query"), city=args.get("city"), work_mode=args.get("work_mode"),
-        skills=args.get("skills"), min_exp=args.get("min_exp"), max_exp=args.get("max_exp"),
+        skills=args.get("skills"), min_exp=min_exp, max_exp=max_exp,
         internship_only=bool(args.get("internship_only")), company_type=args.get("company_type"),
         limit=int(args.get("limit") or 5), resume_skills=resume.get("skills"))
     cards = [_card(j) for j in jobs]
     return {"count": len(cards), "jobs": cards,
             "note": "Sample dataset. Only these jobs exist; do not invent others." if cards
             else "No matching jobs in the sample dataset."}
-
 
 def get_job(args: dict[str, Any], session: dict) -> dict[str, Any]:
     j = get_store().get(str(args.get("job_id", "")))
@@ -63,8 +67,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
          "city": {"type": "string", "description": "Bangalore, Mumbai, Delhi, Gurgaon, Noida, Hyderabad, Pune, Chennai"},
          "work_mode": {"type": "string", "enum": ["Remote", "Hybrid", "On-site"]},
          "skills": {"type": "array", "items": {"type": "string"}},
-         "min_exp": {"type": "integer", "description": "Candidate years of experience (lower bound)"},
-         "max_exp": {"type": "integer", "description": "Candidate years of experience (upper bound)"},
+         "min_exp": {"type": "integer", "description": "The candidate's years of experience. If the user says 'I have N years', set BOTH min_exp=N and max_exp=N."},
+         "max_exp": {"type": "integer", "description": "Same as min_exp: the candidate's years of experience."},
          "internship_only": {"type": "boolean"},
          "company_type": {"type": "string", "enum": ["startup", "mnc", "unicorn", "services"]},
          "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}}}},
