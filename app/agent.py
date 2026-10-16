@@ -73,7 +73,7 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
     session["messages"].append({"role": "user", "content": user_text})
     used: list[str] = []
     t0 = time.time()
-    said,nudged = False,False
+    said, nudged = False, False
     try:
         for _ in range(MAX_ITERS):
             stream = await llm.get_client().chat.completions.create(
@@ -118,11 +118,18 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
             ]
             if usage is not None:
                 llm.add_usage(usage.prompt_tokens, usage.completion_tokens)
+            if msg_text.strip():
+                said = True
             assistant_msg: dict[str, Any] = {"role": "assistant", "content": msg_text or None}
             if tool_calls_list:
                 assistant_msg["tool_calls"] = tool_calls_list
             session["messages"].append(assistant_msg)
             if not tool_calls_list:
+                if not said and used and not nudged:
+                    nudged = True
+                    session["messages"].append(
+                        {"role": "user", "content": "Please answer me now using the tool results."})
+                    continue
                 break
             for ent in tool_calls_list:
                 name = ent["function"]["name"]

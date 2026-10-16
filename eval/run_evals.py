@@ -104,13 +104,19 @@ async def ask(session: dict, prompt: str) -> dict:
 
 async def judge(rubric: str, material: str) -> tuple[bool, str]:
     system = ("You are a strict evaluator of an AI career assistant. Judge the MATERIAL against the RUBRIC. "
-              'Return ONLY JSON: {"pass": true|false, "reason": "<one sentence>"}')
-    try:
-        raw = await llm.complete(system, f"RUBRIC:\n{rubric}\n\nMATERIAL:\n{material}", 300)
-        d = json.loads(raw[raw.find("{"): raw.rfind("}") + 1])
-        return bool(d["pass"]), str(d.get("reason", ""))[:160]
-    except Exception as e:
-        return False, f"judge error: {type(e).__name__}"
+              "If a MESSAGE or ATS section is included, that is part of what you are judging. "
+              'Reply with ONLY this JSON and nothing else: {"pass": true, "reason": "<one short sentence>"} '
+              "(use false when it fails). No analysis, no markdown.")
+    last = ""
+    for _ in range(2):  # one retry on unparseable output
+        try:
+            last = await llm.complete(system, f"RUBRIC:\n{rubric}\n\nMATERIAL:\n{material[:12000]}", 700)
+            m = re.search(r"\{.*\}", last, re.S)
+            d = json.loads(m.group(0))
+            return bool(d["pass"]), str(d.get("reason", ""))[:160]
+        except Exception:
+            continue
+    return False, f"judge unparseable: {last[:60]!r}"
 
 
 def material(case: dict, run: dict, res, extra: str = "") -> str:
@@ -125,6 +131,15 @@ def material(case: dict, run: dict, res, extra: str = "") -> str:
 
 def tool_calls(run: dict, name: str) -> list[dict]:
     return [c for c in run["calls"] if c["name"] == name]
+
+
+def good_call(run: dict, name: str, key: str) -> dict | None:
+    """First call to `name` that succeeded (its output contains `key`)."""
+    return next((c for c in run["calls"] if c["name"] == name and key in c["out"]), None)
+
+
+def used_names(run: dict) -> list[str]:
+    return [c["name"] for c in run["calls"]]
 
 
 # ---------- checkers: each returns (ok, detail) ----------
@@ -197,10 +212,10 @@ def check_match_scores(case, res):
 
 
 async def check_match(case, run, res):
-    calls = tool_calls(run, "explain_match")
-    if not calls or "match_score" not in calls[0]["out"]:
-        return False, "explain_match not called / failed"
-    out = calls[0]["out"]
+    c = good_call(run, "explain_match", "match_score")
+    if not c:
+        return False, f"explain_match missing/failed; tools={used_names(run)}"
+    out = c["out"]
     if not out["strengths"] and not out["gaps"]:
         return False, "no strengths or gaps"
     if not re.search(rf"\b{out['match_score']}\b", run["text"]):
@@ -209,27 +224,30 @@ async def check_match(case, run, res):
 
 
 async def check_ats(case, run, res):
-    calls = tool_calls(run, "ats_check")
-    if not calls or "missing_keywords" not in calls[0]["out"]:
-        return False, "ats_check not called / failed"
-    out, low = calls[0]["out"], res[1].lower()
+    c = good_call(run, "ats_check", "missing_keywords")
+    if not c:
+        return False, f"ats_check missing/failed; tools={used_names(run)}"
+    if not run["text"].strip():
+        return False, "empty final answer"
+    out, low = c["out"], res[1].lower()
     present = [k for k in out["missing_keywords"] if k.lower() in low]
     if present:
         return False, f"flagged missing but present in resume: {present}"
-    ok, why = await judge(case["rubric"], material(case, run, res,
-                          f"ATS MISSING KEYWORDS: {out['missing_keywords']}"))
-    return ok, why
+    return await judge(case["rubric"], material(case, run, res,
+                       f"ATS MISSING KEYWORDS: {out['missing_keywords']}"))
 
 
 async def check_referral(case, run, res):
-    calls = tool_calls(run, "draft_referral_message")
-    if not calls or "message" not in calls[0]["out"]:
-        return False, "draft_referral_message not called / failed"
-    msg = calls[0]["out"]["message"]
+    c = good_call(run, "draft_referral_message", "message")
+    if not c:
+        return False, f"draft_referral_message missing/failed; tools={used_names(run)}"
+    msg = c["out"]["message"]
     words = len(msg.split())
     if words >= 120:
         return False, f"{words} words (limit 120)"
-    ok, why = await judge(case["rubric"], material(case, run, res, f"MESSAGE ({words} words):\n{msg}"))
+    if case["id"] == "R02" and "priya" not in msg.lower():
+        return False, "message does not address Priya"
+    ok, why = await judge(case["rubric"], material(case, run, res, f"MESSAGE TO JUDGE ({words} words):\n{msg}"))
     return ok, f"{words}w; {why}"
 
 
