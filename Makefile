@@ -1,10 +1,13 @@
-.PHONY: install data run test eval
+.PHONY: install data fixtures run test eval
 
 install:
 	python -m pip install -r requirements.txt
 
 data:
 	python scripts/generate_jobs.py
+
+fixtures:
+	python scripts/make_fixtures.py
 
 run:
 	python -m uvicorn app.main:app --reload --port 8000
