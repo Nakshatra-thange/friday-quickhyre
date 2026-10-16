@@ -10,20 +10,18 @@ from openai import APIError
 from app import llm
 from app.tools.registry import TOOL_SCHEMAS, run_tool
 
+
 # TOOL_SCHEMAS are authored in Anthropic shape ({name, description, input_schema});
-# OpenRouter speaks the OpenAI chat-completions shape, so convert at call time.
+# OpenRouter speaks the OpenAI chat-completions shape, so convert once at import.
 def _to_openai_tools(schemas: list[dict]) -> list[dict]:
-    out: list[dict] = []
-    for s in schemas:
-        out.append({
-            "type": "function",
-            "function": {
-                "name": s["name"],
-                "description": s.get("description", ""),
-                "parameters": s.get("input_schema", s.get("parameters", {})),
-            },
-        })
-    return out
+    return [{
+        "type": "function",
+        "function": {
+            "name": s["name"],
+            "description": s.get("description", ""),
+            "parameters": s.get("input_schema", s.get("parameters", {})),
+        },
+    } for s in schemas]
 
 
 OPENAI_TOOL_SCHEMAS = _to_openai_tools(TOOL_SCHEMAS)
@@ -31,6 +29,7 @@ OPENAI_TOOL_SCHEMAS = _to_openai_tools(TOOL_SCHEMAS)
 log = logging.getLogger("friday.agent")
 MAX_ITERS = 6
 MAX_HISTORY = 40
+MAX_TOKENS = 6000  # reasoning tokens count toward this, so keep it generous
 
 SYSTEM_PROMPT = """You are Friday, QuickHyre AI's career copilot (prototype). You help people in India find jobs.
 
@@ -72,12 +71,12 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
                               else "\nNo resume is loaded yet.")
     session["messages"].append({"role": "user", "content": user_text})
     used: list[str] = []
-    t0 = time.time()
     said, nudged = False, False
+    t0 = time.time()
     try:
         for _ in range(MAX_ITERS):
             stream = await llm.get_client().chat.completions.create(
-                model=llm.model(), max_tokens=1500,
+                model=llm.model(), max_tokens=MAX_TOKENS,
                 messages=[{"role": "system", "content": system}, *session["messages"]],
                 tools=OPENAI_TOOL_SCHEMAS,
                 stream=True,
@@ -110,6 +109,7 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
                                     ent["function"]["name"] += tc.function.name
                                 if tc.function.arguments:
                                     ent["function"]["arguments"] += tc.function.arguments
+
             msg_text = "".join(text_parts)
             tool_calls_list = [
                 {"id": ent["id"], "type": "function",
@@ -120,17 +120,22 @@ async def run_turn(session: dict[str, Any], user_text: str, trace: dict | None =
                 llm.add_usage(usage.prompt_tokens, usage.completion_tokens)
             if msg_text.strip():
                 said = True
-            assistant_msg: dict[str, Any] = {"role": "assistant", "content": msg_text or None}
-            if tool_calls_list:
-                assistant_msg["tool_calls"] = tool_calls_list
-            session["messages"].append(assistant_msg)
+
+            # Providers reject empty assistant messages, so only store ones with content or tool calls.
+            if tool_calls_list or msg_text.strip():
+                assistant_msg: dict[str, Any] = {"role": "assistant", "content": msg_text or None}
+                if tool_calls_list:
+                    assistant_msg["tool_calls"] = tool_calls_list
+                session["messages"].append(assistant_msg)
+
             if not tool_calls_list:
-                if not said and used and not nudged:
+                if not said and used and not nudged:  # tools ran but the model said nothing: ask once
                     nudged = True
                     session["messages"].append(
                         {"role": "user", "content": "Please answer me now using the tool results."})
                     continue
                 break
+
             for ent in tool_calls_list:
                 name = ent["function"]["name"]
                 used.append(name)

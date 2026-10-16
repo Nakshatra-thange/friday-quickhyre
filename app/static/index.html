@@ -6,11 +6,7 @@
 <title>Friday – AI Career Copilot (prototype)</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-#resume-chip{max-width:820px;margin:0 auto;width:100%;padding:6px 16px;font-size:13px;color:var(--muted)}
-#resume-chip[hidden]{display:none}
-#resume-chip b{color:var(--text)} #resume-chip .warn{color:#b45309}
-.up{display:flex;align-items:center;font-size:20px;cursor:pointer;padding:0 4px}
-.job .row{display:flex;gap:8px;flex-wrap:wrap}
+
 <style>  #resume-chip{max-width:820px;margin:0 auto;width:100%;padding:6px 16px;font-size:13px;color:var(--muted)}
   #resume-chip[hidden]{display:none}
   #resume-chip b{color:var(--text)} #resume-chip .warn{color:#b45309}
@@ -48,7 +44,7 @@
 <div id="starters"></div>
 <div id="resume-chip" hidden></div>
 <form id="f"><label class="up" title="Upload resume (PDF/DOCX, max 2 MB)">📎<input id="file" type="file" accept=".pdf,.docx" hidden></label><input id="in" placeholder="Ask Friday about jobs..." autocomplete="off" maxlength="2000"><button id="go">Send</button></form>
-<footer>Prototype built by &lt;your name&gt;. Sample data, not real listings. Not affiliated with QuickHyre AI.</footer>
+
 <script>
 const sid = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + Math.random().toString(36).slice(2);
 const chat = document.getElementById('chat'), input = document.getElementById('in'), go = document.getElementById('go');

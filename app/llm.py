@@ -18,6 +18,7 @@ _budget = {
     "day": date.today().isoformat(),
     "used": 0,
 }
+MIN_TOKENS = 4000
 
 # Cumulative token usage, used by the evaluation runner.
 USAGE = {
@@ -82,7 +83,7 @@ async def complete(system: str, user: str, max_tokens: int = 800, model_name: st
 
     resp = await get_client().chat.completions.create(
         model=model_name or model(),
-        max_tokens=max_tokens,
+       max_tokens=max(max_tokens, MIN_TOKENS),
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
